@@ -17,12 +17,16 @@
 import Foundation
 
 extension Chain.Specification {
-    
+
+    /// Chain name as defined in the specification.
     public var name: String {
+        precondition(self["name"] != nil, "Chain Specification is missing required key `name`")
         return self["name"] as! String
     }
     
+    /// Chain identifier as defined in the specification.
     var id: String {
+        precondition(self["id"] != nil, "Chain Specification is missing required key `id`")
         return self["id"] as! String
     }
 }

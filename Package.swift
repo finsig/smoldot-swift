@@ -13,7 +13,7 @@ let package = Package(
             targets: ["SmoldotSwift"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/finsig/json-rpc2", from: "0.1.0"),
+        .package(url: "https://github.com/finsig/json-rpc2", from: "0.1.1")
         .package(url: "https://github.com/apple/swift-docc-plugin", from: "1.0.0")
     ],
     targets: [
@@ -23,13 +23,8 @@ let package = Package(
                 "CSmoldot",
                 .product(name: "JSONRPC2", package: "json-rpc2"),
             ],
-            path: "Sources/SmoldotSwift",
-            resources: [
-                .process("Resources/polkadot.json"),
-                .process("Resources/kusama.json"),
-                .process("Resources/rococo.json"),
-                .process("Resources/westend.json")]
-            ),
+            path: "Sources/SmoldotSwift"
+        ),
         .target(
             name: "CSmoldot",
             dependencies: ["smoldot"],
@@ -47,6 +42,13 @@ let package = Package(
         
         .testTarget(
             name: "SmoldotSwiftTests",
-            dependencies: ["SmoldotSwift"]),
+            dependencies: ["SmoldotSwift"],
+            resources: [
+                .process("Resources/polkadot.json"),
+                .process("Resources/kusama.json"),
+                .process("Resources/rococo.json"),
+                .process("Resources/westend.json")]
+        ),
+        
     ]
 )

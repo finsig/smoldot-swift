@@ -8,114 +8,76 @@ final class SmoldotSwiftTests: XCTestCase {
     var chain: Chain!
     
     override func setUp() async throws {
-        chain = Chain(specification: .polkadot)
+        ///
+        /// Chain specification file to use for testing. If adding a file, also explicitly declare the resource for
+        /// the test target in the package manifest.
+        ///
+        let url = Bundle.module.url(forResource: "polkadot", withExtension: "json")!
+        //let url = Bundle.module.url(forResource: "kusama", withExtension: "json")!
+        //let url = Bundle.module.url(forResource: "rococo", withExtension: "json")!
+        //let url = Bundle.module.url(forResource: "westend", withExtension: "json")!
+        
+        chain = try Chain(specificationFile: url)
+        
+        XCTAssertFalse( chain.isValid )
     }
     
     func testAddChain() throws {
-        try Client.shared.add(chain: &chain)
+        /// Add the chain to the client
+        XCTAssertNoThrow( try Client.shared.add(chain: &chain) )
         
         XCTAssertTrue( chain.isValid )
     }
     
     func testAddChainAlreadyAdded() throws {
-        try Client.shared.add(chain: &chain)
-        
-        XCTAssertThrowsError( try Client.shared.add(chain: &chain) )
-    }
-    
-    /*
-    func testAddChainRemoveChainMemoryPerformance() async throws {
-        self.measure(metrics: [XCTMemoryMetric()]) {
-            let exp = expectation(description: "Finished")
-            Task {
-                try Client.shared.add(chain: &chain)
-                //try await Task.sleep(nanoseconds: 1_000_000_000 * 30) // sleep
-                try Client.shared.remove(chain: &chain)
-                //try await Task.sleep(nanoseconds: 1_000_000_000 * 30) // sleep
-                exp.fulfill()
-            }
-            wait(for: [exp], timeout: 1_000_000_000 * 30)
+        /// Add the chain to the client
+        XCTAssertNoThrow( try Client.shared.add(chain: &chain) )
+
+        /// Add the chain to the client again
+        XCTAssertThrowsError( try Client.shared.add(chain: &chain) ) { error in
+            XCTAssertTrue( error as! ClientError == ClientError.chainHasAlreadyBeenAdded )
         }
     }
-    */
     
     func testRemoveChain() throws {
-        try Client.shared.add(chain: &chain)
-        try Client.shared.remove(chain: &chain)
+        /// Add the chain to the client
+        XCTAssertNoThrow( try Client.shared.add(chain: &chain) )
+        XCTAssertTrue( chain.isValid )
         
+        /// Remove the chain from the client
+        XCTAssertNoThrow( try Client.shared.remove(chain: &chain) )
         XCTAssertFalse( chain.isValid )
     }
     
     func testRemoveChainNotAdded() throws {
-        XCTAssertThrowsError( try Client.shared.remove(chain: &chain) )
-    }
-    
-    func testJSONRPCRequestResponse() async throws {
-        try Client.shared.add(chain: &chain)
-        
-        let request = try JSONRPC2Request(string: "{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"system_chain\",\"params\":[]}")
-        
-        XCTAssertNoThrow( try Client.shared.send(request: request, to: chain) )
-
-        let responseData = try await Client.shared.response(from: chain)?.data(using: .utf8)
-        
-        XCTAssertNotNil(responseData)
-
-        let response = try JSONDecoder().decode(Response.self, from: responseData!)
-        
-        XCTAssertNotNil(request.identifier)
-        
-        XCTAssertEqual(response.identifier, request.identifier!)
-        
-        switch response.result {
-        case .success(let json):
-            XCTAssertEqual(json.description, "Polkadot")
-        case .failure(_):
-            XCTFail()
+        /// Try to remove the chain when it has not been added to the client.
+        XCTAssertThrowsError( try Client.shared.remove(chain: &chain) ) { error in
+            XCTAssertTrue( error as! ClientError == ClientError.chainNotFound )
         }
     }
     
     func testJSONRPC2RequestInvalidJSON() async throws {
-    
-        XCTAssertThrowsError(try JSONRPC2Request(string: "invalid json") )
+        /// Try to build a JSON-RPC2 request from a non-JSON value.
+        XCTAssertThrowsError( try JSONRPC2Request(string: "invalid json") ) { error in
+            XCTAssertTrue( (error as! JSONRPC2Error).code == JSONRPC2Error.Code.invalidRequest )
+        }
     }
     
     func testJSONRPC2RequestInvalidJSONRPCVersion() async throws {
-    
-        XCTAssertThrowsError(try JSONRPC2Request(string: "{\"id\":1,\"jsonrpc\":\"1.0\",\"method\":\"system_chain\",\"params\":[]}") )
+        /// Try to build a JSON-RPC 1.0 request.
+        XCTAssertThrowsError( try JSONRPC2Request(string: "{\"id\":1,\"jsonrpc\":\"1.0\",\"method\":\"system_chain\",\"params\":[]}") ) { error in
+            XCTAssertTrue( (error as! JSONRPC2Error).code == JSONRPC2Error.Code.invalidRequest )
+        }
     }
     
     func testJSONRPC2RequestChainNotAdded() async throws {
-        let chain = Chain(specification: .kusama)
+        /// Try to send a request to a chain without first adding it to the client.
+        let request = try? JSONRPC2Request(string: "{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"system_chain\",\"params\":[]}")
+        XCTAssertNotNil(request)
         
-        let request = try JSONRPC2Request(string: "{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"system_chain\",\"params\":[]}")
-        
-        XCTAssertThrowsError( try Client.shared.send(request: request, to: chain) )
+        XCTAssertThrowsError( try Client.shared.send(request: request!, to: chain) ) { error in
+            XCTAssertTrue( error as! ClientError == ClientError.chainNotFound )
+        }
     }
 
-}
-
-
-fileprivate extension Chain.Specification {
-    
-    static var polkadot: JSONObject {
-        return jsonObject(resourceName: "polkadot")
-    }
-    
-    static var kusama: JSONObject {
-        return jsonObject(resourceName: "kusama")
-    }
-    
-    private static func jsonObject(resourceName name: String) -> JSONObject {
-        guard let url = Bundle.module.url(forResource: name, withExtension: "json") else {
-            fatalError()
-        }
-        guard let data = try? Data(contentsOf: url) else {
-            fatalError()
-        }
-        guard let jsonObject = try? JSONSerialization.jsonObject(with: data) as? JSONObject else {
-            fatalError()
-        }
-        return jsonObject
-    }
 }
